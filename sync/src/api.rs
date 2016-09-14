@@ -43,6 +43,8 @@ pub struct SyncConfig {
 	pub network_id: U256,
 	/// Fork block to check
 	pub fork_block: Option<(BlockNumber, H256)>,
+	/// Enable snapshot sync
+	pub warp_sync: bool,
 }
 
 impl Default for SyncConfig {
@@ -51,6 +53,7 @@ impl Default for SyncConfig {
 			max_download_ahead_blocks: 20000,
 			network_id: U256::from(1),
 			fork_block: None,
+			warp_sync: true,
 		}
 	}
 }
