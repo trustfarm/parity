@@ -1192,6 +1192,11 @@ impl BlockChain {
 		body.append_raw(block_rlp.at(2).as_raw(), 1);
 		body.out()
 	}
+
+	#[cfg(test)]
+	pub fn db(&self) -> &Arc<Database> {
+		&self.db
+	}
 }
 
 #[cfg(test)]
