@@ -21,6 +21,8 @@ use util::*;
 use pod_account::*;
 use rlp::*;
 
+use super::CODE_SIZE_KEY;
+
 use std::cell::{Ref, RefCell, Cell};
 
 /// Single account in the system.
@@ -196,6 +198,16 @@ impl Account {
 		}
 	}
 
+	/// returns the account's code size (if available)
+	pub fn code_size(&self) -> Option<usize> {
+		match self.code_hash {
+			Some(c) if c == SHA3_EMPTY && self.code_cache.is_empty() => Some(0),
+			Some(_) if !self.code_cache.is_empty() => Some(self.code_cache.len()),
+			None => Some(self.code_cache.len()),
+			_ => None,
+		}
+	}
+
 	#[cfg(test)]
 	/// Provide a byte array which hashes to the `code_hash`. returns the hash as a result.
 	pub fn note_code(&mut self, code: Bytes) -> Result<(), H256> {
@@ -231,7 +243,10 @@ impl Account {
 		self.is_cached() ||
 			match self.code_hash {
 				Some(ref h) => match db.get(h) {
-					Some(x) => { self.code_cache = x.to_vec(); true },
+					Some(x) => {
+						self.code_cache = x.to_vec();
+						true
+					},
 					_ => {
 						warn!("Failed reverse get of {}", h);
 						false
@@ -306,6 +321,7 @@ impl Account {
 			(true, true) => self.code_hash = Some(SHA3_EMPTY),
 			(true, false) => {
 				self.code_hash = Some(db.insert(&self.code_cache));
+				db.emplace(CODE_SIZE_KEY.clone(), ::rlp::encode(&self.code_cache.len()).to_vec());
 			},
 			(false, _) => {},
 		}

@@ -30,6 +30,13 @@ mod substate;
 pub use self::account::Account;
 pub use self::substate::Substate;
 
+/// Key used to indicate contract code size encoded as RLP.
+/// The first 12 bytes (searchable prefix) is "contractcode"
+const CODE_SIZE_KEY: H256 = H256([
+	b'c', b'o', b'n', b't', b'r', b'a', b'c', b't', b'c', b'o', b'd', b'e',
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+]);
+
 /// Used to return information about an `State::apply` operation.
 pub struct ApplyOutcome {
 	/// The receipt for the applied transaction.
@@ -198,9 +205,31 @@ impl State {
 	}
 
 	/// Get the code size of account `a`.
+	/// Does no trie lookups, and only a single database query if the
+	/// account isn't cached.
 	pub fn code_size(&self, a: &Address) -> Option<usize> {
-		self.ensure_cached(a, true,
-			|a| a.as_ref().map_or(None, |a| a.code().map(|x| x.len())))
+		let mut addr_hash = None;
+
+		if let Some(acc) = self.cache.borrow().get(a) {
+			let acc = match *acc {
+				Some(ref acc) => acc,
+				None => return None, // account is known not to exist.
+			};
+
+			if let size @ Some(_) = acc.code_size() {
+				// we have an account which knows its code size.
+				return size;
+			}
+
+			// otherwise, make use of the address hash cache -- it'll
+			// also come in useful when committing.
+			addr_hash = Some(acc.address_hash(a));
+		}
+
+		let addr_hash = addr_hash.unwrap_or_else(|| a.sha3());
+		let db = self.factories.accountdb.readonly(self.db.as_hashdb(), addr_hash);
+
+		db.get(&CODE_SIZE_KEY).map(::rlp::decode)
 	}
 
 	/// Add `incr` to the balance of account `a`.
