@@ -62,23 +62,28 @@ pub fn clean_0x(s: &str) -> &str {
 	}
 }
 
-fn set_bloom(filter: &mut [u8], p: usize, val: &[u8]) {
-	let m = filter.len();
-	let size = val.len();
+pub fn log2(x: usize) -> usize {
+	if x <= 1 {
+		return 0;
+	}
 
-	let bloom_bits = m >> 3;
+	let n = x.leading_zeros() as usize;
+	::std::mem::size_of::<usize>() as usize * 8 - n
+}
+
+#[inline(always)]
+fn bloom_mask(m : usize) -> (usize, usize) {
+	let bloom_bits = m << 3;
 	let mask = bloom_bits - 1;
 	let bloom_bytes = (log2(bloom_bits) + 7) / 8;
 
-	// must be a power of 2
-	assert_eq!(m & (m - 1), 0);
-	// out of range
-	assert!(p * bloom_bytes <= size);
+	(bloom_bytes, mask)
+}
 
-	// 'ptr' to out slice
+fn set_bloom(filter: &mut [u8], p: usize, val: &[u8]) {
+	let m = filter.len();
+	let (bloom_bytes, mask) = bloom_mask(m);
 	let mut ptr = 0;
-
-	// set p number of bits,
 	for _ in 0..p {
 		let mut index = 0 as usize;
 		for _ in 0..bloom_bytes {
@@ -88,6 +93,24 @@ fn set_bloom(filter: &mut [u8], p: usize, val: &[u8]) {
 		index &= mask;
 		filter[m - 1 - index / 8] |= 1 << (index % 8);
 	}
+}
+
+fn contains_bloom(filter: &[u8], p: usize, val: &[u8]) -> bool {
+	let m = filter.len();
+	let (bloom_bytes, mask) = bloom_mask(m);
+	let mut ptr = 0;
+	for _ in 0..p {
+		let mut index = 0 as usize;
+		for _ in 0..bloom_bytes {
+			index = (index << 8) | val[ptr] as usize;
+			ptr += 1;
+		}
+		index &= mask;
+		if filter[m - 1 - index / 8] & (1 << (index % 8)) == 0 {
+			return false;
+		}
+	}
+	return true;
 }
 
 macro_rules! impl_hash {
@@ -534,7 +557,7 @@ mod tests {
 	use hash::*;
 	use uint::*;
 	use std::str::FromStr;
-	use super::set_bloom;
+	use super::{set_bloom, contains_bloom};
 
 	#[test]
 	fn hasher_alignment() {
@@ -605,11 +628,30 @@ mod tests {
 
 	#[test]
 	fn filter_bloom() {
-		let mut filter = [0u8; 16];
-		let val = [0u8; 2];
+		let mut filter = [0u8; 256];
 
-		set_bloom(&mut filter, 3, val);
+		let val = [
+			1u8,   2,   3,   4,   5,  12,  18, 123,
+			 12, 123,  99,  55,  99,  12,  16,   7,
+			  9,   8,  99,  44,  78,  14, 129, 253,
+			 19,   8,  99,  44,  78,  14,  99, 243
+		];
 
-		assert_eq!(filter, [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]);
+		let val2 = [
+			5u8,   9, 123,  66,   5,  12,  18, 123,
+			 12, 123,  99,  13,  99,  12,  16,  17,
+			  9,   8,  99,  74,  78,  14, 129, 253,
+			 19,   9,  99,  24,  78,  14, 129, 143
+		];
+
+		set_bloom(&mut filter, 4, &val);
+
+		assert!(contains_bloom(&filter, 4, &val));
+		assert!(!contains_bloom(&filter, 4, &val2));
+
+		set_bloom(&mut filter, 4, &val2);
+
+		assert!(contains_bloom(&filter, 4, &val));
+		assert!(contains_bloom(&filter, 4, &val2));
 	}
 }
