@@ -20,27 +20,32 @@ use rlpcompression::InvalidRlpSwapper;
 
 lazy_static! {
 	/// Swapper for snapshot compression.
-	pub static ref SNAPSHOT_RLP_SWAPPER: InvalidRlpSwapper<'static> = InvalidRlpSwapper::new(EMPTY_RLPS, INVALID_RLPS);
+	pub static ref SNAPSHOT_RLP_SWAPPER: InvalidRlpSwapper<'static> = InvalidRlpSwapper::new(COMMON_SNAPSHOT_RLPS, INVALID_RLPS);
 }
 
 lazy_static! {
 	/// Swapper with common long RLPs, up to 127 can be added.
-	pub static ref BLOCKS_RLP_SWAPPER: InvalidRlpSwapper<'static> = InvalidRlpSwapper::new(COMMON_RLPS, INVALID_RLPS);
+	pub static ref BLOCKS_RLP_SWAPPER: InvalidRlpSwapper<'static> = InvalidRlpSwapper::new(COMMON_BLOCKS_RLPS, INVALID_RLPS);
 }
 
-static EMPTY_RLPS: &'static [&'static [u8]] = &[
-	// RLP of SHA3_NULL_RLP
-	&[160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33],
-	// RLP of SHA3_EMPTY
-	&[160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112]
-];
-
-static COMMON_RLPS: &'static [&'static [u8]] = &[
+// Obtained by analyzing compression traces and picking common space saving RLPs. Assuming compressed representation is 2 bytes.
+static COMMON_SNAPSHOT_RLPS: &'static [&'static [u8]] = &[
 	// RLP of SHA3_NULL_RLP
 	&[160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33],
 	// RLP of SHA3_EMPTY
 	&[160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112],
-	// Other RLPs found in blocks DB using the test below.
+	&[160, 41, 13, 236, 217, 84, 139, 98, 168, 214, 3, 69, 169, 136, 56, 111, 200, 75, 166, 188, 149, 72, 64, 8, 246, 54, 47, 147, 22, 14, 243, 229, 99],
+	&[160, 177, 14, 45, 82, 118, 18, 7, 59, 38, 238, 205, 253, 113, 126, 106, 50, 12, 244, 75, 74, 250, 194, 176, 115, 45, 159, 203, 226, 183, 250, 12, 246],
+	&[160, 64, 146, 200, 165, 251, 100, 135, 233, 49, 165, 103, 154, 176, 88, 120, 140, 153, 189, 184, 79, 180, 159, 219, 248, 205, 93, 193, 49, 232, 162, 241, 159],
+	&[149, 148, 187, 155, 194, 68, 215, 152, 18, 63, 222, 120, 63, 204, 28, 114, 211, 187, 140, 24, 148, 19],
+	&[149, 148, 139, 59, 59, 98, 76, 60, 3, 151, 211, 218, 143, 216, 97, 81, 35, 147, 213, 29, 203, 172]
+];
+
+static COMMON_BLOCKS_RLPS: &'static [&'static [u8]] = &[
+	// RLP of SHA3_NULL_RLP
+	&[160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33],
+	// RLP of SHA3_EMPTY
+	&[160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112],
 	&[160, 29, 204, 77, 232, 222, 199, 93, 122, 171, 133, 181, 103, 182, 204, 212, 26, 211, 18, 69, 27, 148, 138, 116, 19, 240, 161, 66, 253, 64, 212, 147, 71],
 	&[148, 50, 190, 52, 59, 148, 248, 96, 18, 77, 196, 254, 226, 120, 253, 203, 211, 140, 16, 45, 136],
 	&[148, 82, 188, 68, 213, 55, 131, 9, 238, 42, 191, 21, 57, 191, 113, 222, 27, 125, 123, 227, 181],
