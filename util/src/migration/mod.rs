@@ -102,6 +102,12 @@ impl From<::std::io::Error> for Error {
 	}
 }
 
+impl From<String> for Error {
+	fn from(s: String) -> Self {
+		Error::Custom(s)
+	}
+}
+
 /// A generalized migration from the given db to a destination db.
 pub trait Migration: 'static {
 	/// Number of columns in database after the migration.
