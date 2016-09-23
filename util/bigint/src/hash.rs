@@ -62,6 +62,34 @@ pub fn clean_0x(s: &str) -> &str {
 	}
 }
 
+fn set_bloom(filter: &mut [u8], p: usize, val: &[u8]) {
+	let m = filter.len();
+	let size = val.len();
+
+	let bloom_bits = m >> 3;
+	let mask = bloom_bits - 1;
+	let bloom_bytes = (log2(bloom_bits) + 7) / 8;
+
+	// must be a power of 2
+	assert_eq!(m & (m - 1), 0);
+	// out of range
+	assert!(p * bloom_bytes <= size);
+
+	// 'ptr' to out slice
+	let mut ptr = 0;
+
+	// set p number of bits,
+	for _ in 0..p {
+		let mut index = 0 as usize;
+		for _ in 0..bloom_bytes {
+			index = (index << 8) | val[ptr] as usize;
+			ptr += 1;
+		}
+		index &= mask;
+		filter[m - 1 - index / 8] |= 1 << (index % 8);
+	}
+}
+
 macro_rules! impl_hash {
 	($from: ident, $size: expr) => {
 		#[derive(Eq)]
@@ -506,6 +534,7 @@ mod tests {
 	use hash::*;
 	use uint::*;
 	use std::str::FromStr;
+	use super::set_bloom;
 
 	#[test]
 	fn hasher_alignment() {
@@ -572,5 +601,15 @@ mod tests {
 		assert_eq!(r_ref, u);
 		let r: U256 = From::from(h);
 		assert_eq!(r, u);
+	}
+
+	#[test]
+	fn filter_bloom() {
+		let mut filter = [0u8; 16];
+		let val = [0u8; 2];
+
+		set_bloom(&mut filter, 3, val);
+
+		assert_eq!(filter, [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0]);
 	}
 }
