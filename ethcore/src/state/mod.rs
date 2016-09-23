@@ -31,8 +31,11 @@ pub use self::account::Account;
 pub use self::substate::Substate;
 
 /// Key used to indicate contract code size encoded as RLP.
-/// The first 12 bytes (searchable prefix) is "contractcode"
-const CODE_SIZE_KEY: H256 = H256([
+/// The first 12 bytes (searchable prefix) is "contractcode".
+///
+/// The last 20 bytes will be mangled to the last 20 bytes of the
+/// address hash.
+pub const CODE_SIZE_KEY: H256 = H256([
 	b'c', b'o', b'n', b't', b'r', b'a', b'c', b't', b'c', b'o', b'd', b'e',
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ]);

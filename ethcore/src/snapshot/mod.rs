@@ -449,6 +449,7 @@ impl StateRebuilder {
 			for addr_hash in self.missing_code.remove(&code_hash).unwrap_or_else(Vec::new) {
 				let mut db = AccountDBMut::from_hash(self.db.as_hashdb_mut(), addr_hash);
 				db.emplace(code_hash, code.clone());
+				db.emplace(::state::CODE_SIZE_KEY, ::rlp::encode(&code.len()).to_vec());
 			}
 
 			self.code_map.insert(code_hash, code);

@@ -156,12 +156,16 @@ impl Account {
 				let code: Bytes = try!(rlp.val_at(3));
 				let code_hash = acct_db.insert(&code);
 
+				acct_db.emplace(::state::CODE_SIZE_KEY, ::rlp::encode(&code.len()).to_vec());
+
 				(code_hash, Some(code))
 			}
 			CodeState::Hash => {
+				// all we've got is a hash -- check the known-code map.
 				let code_hash = try!(rlp.val_at(3));
 				if let Some(code) = code_map.get(&code_hash) {
 					acct_db.emplace(code_hash.clone(), code.clone());
+					acct_db.emplace(::state::CODE_SIZE_KEY, ::rlp::encode(&code.len()).to_vec());
 				}
 
 				(code_hash, None)
