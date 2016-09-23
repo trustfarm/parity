@@ -22,11 +22,11 @@ use util::kvdb::Database;
 use util::migration::{Batch, Config, Error, Migration, Progress};
 use util::hash::{FixedHash, H256};
 use util::trie::{TrieDB, Trie};
-use util::{HashDB, MemoryDB};
+use util::journaldb;
 
 use views::HeaderView;
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
 // constants reproduced here for backwards compatibility.
 const COL_STATE: Option<u32> = Some(0);
@@ -56,36 +56,21 @@ fn combine_key(addr_hash: &H256, key: &H256) -> H256 {
 	dst
 }
 
-// dummy hashdb implementation wrapping a raw database.
-// we don't have an `Arc<Database>` so we can't do journaldb.
-struct DummyDB<'a> {
-	db: &'a Database,
-	overlay: MemoryDB, // necessary for denote!
-	col: Option<u32>
-}
-
-impl<'a> HashDB for DummyDB<'a> {
-	fn keys(&self) -> HashMap<H256, i32> { unimplemented!() }
-
-	fn get(&self, key: &H256) -> Option<&[u8]> {
-		self.db.get(self.col, key).ok().and_then(|x| x)
-			.map(|x| self.overlay.denote(key, x.to_vec()).0)
-	}
-
-	fn contains(&self, key: &H256) -> bool {
-		self.get(key).is_some()
-	}
-
-	fn insert(&mut self, _value: &[u8]) -> H256 { unimplemented!() }
-
-	fn emplace(&mut self, _key: H256, _value: Vec<u8>) { unimplemented!() }
-
-	fn remove(&mut self, _key: &H256) { unimplemented!() }
-}
-
 /// Inserts all account code sizes into the database.
 pub struct ToV10 {
+	pruning: journaldb::Algorithm,
 	progress: Progress,
+}
+
+impl ToV10 {
+	/// Create a new `ToV10` migration for a given pruning algorithm.
+	pub fn new(pruning: journaldb::Algorithm) -> Self {
+		ToV10 {
+			pruning: pruning,
+			progress: Progress::default(),
+		}
+	}
+
 }
 
 impl Migration for ToV10 {
@@ -93,7 +78,7 @@ impl Migration for ToV10 {
 
 	fn version(&self) -> u32 { 10 }
 
-	fn migrate(&mut self, source: &Database, config: &Config, dest: &mut Database, col: Option<u32>) -> Result<(), Error> {
+	fn migrate(&mut self, source: Arc<Database>, config: &Config, dest: &mut Database, col: Option<u32>) -> Result<(), Error> {
 		let mut batch = Batch::new(config, col);
 
 		// first, copy over all the existing column data.
@@ -119,16 +104,12 @@ impl Migration for ToV10 {
 
 		let state_root = HeaderView::new(&best_header_raw).state_root();
 
-		let dummy = DummyDB {
-			db: source,
-			overlay: MemoryDB::new(),
-			col: col,
-		};
+		let db = journaldb::new(source.clone(), self.pruning, col);
 
 		let trie_err = "Corrupted database: missing trie nodes.".to_owned();
 
 		// iterate over all accounts (addr_hash -> account RLP) in the trie.
-		let trie = try!(TrieDB::new(&dummy, &state_root)
+		let trie = try!(TrieDB::new(db.as_hashdb(), &state_root)
 			.map_err(|_| Error::Custom(trie_err.clone())));
 
 		for item in try!(trie.iter().map_err(|_| Error::Custom(trie_err.clone()))) {
@@ -136,20 +117,21 @@ impl Migration for ToV10 {
 
 			let (addr_hash, raw_acc) = try!(item.map_err(|_| Error::Custom(trie_err.clone())));
 
-			let addr_hash: H256 = ::rlp::decode(&addr_hash);
+			let addr_hash: H256 = H256::from_slice(&addr_hash);
 			let code_hash: H256 = Rlp::new(&raw_acc).val_at(3);
 
 			if code_hash == ::util::sha3::SHA3_EMPTY { continue }
 			let code_key = combine_key(&addr_hash, &code_hash);
 
 			// fetch the code size if it's got code.
-			let size = match try!(source.get(col, &code_key)) {
+			let size = match db.get(&code_key) {
 				Some(code) => code.len(),
 				None => return Err(Error::Custom("Corrupted database: code lookup failed.".into())),
 			};
 
 			// and insert that into the database.
 			let size_key = combine_key(&addr_hash, &CODE_SIZE_KEY);
+
 			try!(batch.insert(size_key.to_vec(), ::rlp::encode(&size).to_vec(), dest));
 
 			self.progress.tick();

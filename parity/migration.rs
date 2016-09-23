@@ -142,9 +142,10 @@ pub fn default_migration_settings(compaction_profile: &CompactionProfile) -> Mig
 }
 
 /// Migrations on the consolidated database.
-fn consolidated_database_migrations(compaction_profile: &CompactionProfile) -> Result<MigrationManager, Error> {
+fn consolidated_database_migrations(pruning: Algorithm, compaction_profile: &CompactionProfile) -> Result<MigrationManager, Error> {
 	let mut manager = MigrationManager::new(default_migration_settings(compaction_profile));
-	try!(manager.add_migration(migrations::ToV10::default()).map_err(|_| Error::MigrationImpossible));
+	try!(manager.add_migration(migrations::ToV10::new(pruning))
+		.map_err(|_| Error::MigrationImpossible));
 	Ok(manager)
 }
 
@@ -179,7 +180,7 @@ fn consolidate_database(
 	let mut new_db = try!(Database::open(&db_config, new_path_str).map_err(db_error));
 
 	// Migrate to new database (default column only)
-	try!(migration.migrate(&cur_db, &config, &mut new_db, None));
+	try!(migration.migrate(cur_db.into(), &config, &mut new_db, None));
 
 	Ok(())
 }
@@ -259,7 +260,11 @@ pub fn migrate(path: &Path, pruning: Algorithm, compaction_profile: CompactionPr
 	// Further migrations
 	if version >= CONSOLIDATION_VERSION && version < CURRENT_VERSION && exists(&consolidated_database_path(path)) {
 		println!("Migrating database from version {} to {}", ::std::cmp::max(CONSOLIDATION_VERSION, version), CURRENT_VERSION);
-		try!(migrate_database(version, consolidated_database_path(path), try!(consolidated_database_migrations(&compaction_profile))));
+		try!(migrate_database(
+			version,
+			consolidated_database_path(path),
+			try!(consolidated_database_migrations(pruning, &compaction_profile))
+		));
 		println!("Migration finished");
 	}
 

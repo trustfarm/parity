@@ -27,6 +27,7 @@ use util::sha3::Hashable;
 
 use rlp::{decode, Rlp, RlpStream, Stream, View};
 
+use std::sync::Arc;
 
 // attempt to migrate a key, value pair. None if migration not possible.
 fn attempt_migrate(mut key_h: H256, val: &[u8]) -> Option<H256> {
@@ -228,7 +229,7 @@ impl Migration for OverlayRecentV7 {
 	// walk all records in the database, attempting to migrate any possible and
 	// keeping records of those that we do. then migrate the journal using
 	// this information.
-	fn migrate(&mut self, source: &Database, config: &Config, dest: &mut Database, col: Option<u32>) -> Result<(), Error> {
+	fn migrate(&mut self, source: Arc<Database>, config: &Config, dest: &mut Database, col: Option<u32>) -> Result<(), Error> {
 		let mut batch = Batch::new(config, col);
 
 		// check version metadata.
@@ -257,7 +258,7 @@ impl Migration for OverlayRecentV7 {
 			try!(batch.insert(key, value.into_vec(), dest));
 		}
 
-		try!(self.walk_journal(source));
-		self.migrate_journal(source, batch, dest)
+		try!(self.walk_journal(&*source));
+		self.migrate_journal(&*source, batch, dest)
 	}
 }
