@@ -37,6 +37,7 @@ pub struct StateDB {
 
 pub const ACCOUNT_BLOOM_SPACE: usize = 16384;
 pub const ACCOUNT_BLOOM_HASHCOUNT: usize = 8;
+pub const ACCOUNT_BLOOM_COLUMN_NAME: &'static [u8] = b"accounts_bloom";
 
 impl StateDB {
 
@@ -58,7 +59,7 @@ impl StateDB {
 
 	/// Create a new instance wrapping `JournalDB`
 	pub fn new(db: Box<JournalDB>) -> StateDB {
-		let bloom = match db.backing().get(None, b"accounts_bloom").expect("Low-level database error") {
+		let bloom = match db.backing().get(None, ACCOUNT_BLOOM_COLUMN_NAME).expect("Low-level database error") {
 			Some(val) => {
 				if val.len() != ACCOUNT_BLOOM_SPACE {
 					Self::new_account_bloom()
