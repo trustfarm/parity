@@ -25,6 +25,25 @@ use ethash::SeedHashCompute;
 use hyper::Url;
 use util::*;
 use ethereum::ethash::Ethash;
+use std::net::{UdpSocket, SocketAddrV4};
+
+pub struct UdpPoster {
+	udp_socket: UdpSocket,
+	dest_addr: SocketAddrV4,
+}
+
+impl UdpPoster {
+	pub fn new() -> Self {
+		UdpPoster {
+			dest_addr: FromStr::from_str("127.0.0.1:8545").unwrap(),
+			udp_socket: UdpSocket::bind("127.0.0.1:30203").unwrap(),
+		}
+	}
+
+	pub fn notify(&self, pow_hash: H256) {
+		self.udp_socket.send_to(pow_hash.as_slice(), &self.dest_addr).ok();
+	}
+}
 
 pub struct WorkPoster {
 	urls: Vec<Url>,

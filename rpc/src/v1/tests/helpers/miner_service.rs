@@ -75,6 +75,10 @@ impl MinerService for TestMinerService {
 		}
 	}
 
+	fn submit_work_block(&self, _block: Bytes) -> Result<(), Error> {
+		Ok(())
+	}
+
 	fn set_author(&self, author: Address) {
 		*self.author.write() = author;
 	}

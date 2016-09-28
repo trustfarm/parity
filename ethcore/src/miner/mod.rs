@@ -175,6 +175,9 @@ pub trait MinerService : Send + Sync {
 
 	/// Get contract code in pending state.
 	fn code(&self, chain: &MiningBlockChainClient, address: &Address) -> Option<Bytes>;
+
+	/// Submut work block without seal to the queue.
+	fn submit_work_block(&self, block: Bytes) -> Result<(), Error>;
 }
 
 /// Mining status
