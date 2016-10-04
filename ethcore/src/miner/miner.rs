@@ -173,6 +173,12 @@ impl BlockEntry {
 		}
 	}
 
+	fn as_block(&self) -> &Block {
+		match *self {
+			BlockEntry::Closed(ref b) => b.base(),
+			BlockEntry::Raw(ref b) => b,
+		}
+	}
 	fn hash(&self) -> H256 {
 		match *self {
 			BlockEntry::Closed(ref b) => b.hash(),
@@ -858,14 +864,14 @@ impl MinerService for Miner {
 		self.sealing_work.lock().queue.is_in_use()
 	}
 
-	fn map_sealing_work<F, T>(&self, chain: &MiningBlockChainClient, f: F) -> Option<T> where F: FnOnce(&ClosedBlock) -> T {
+	fn map_sealing_work<F, T>(&self, chain: &MiningBlockChainClient, f: F) -> Option<T> where F: FnOnce(&Block) -> T {
 		trace!(target: "miner", "map_sealing_work: entering");
 		self.enable_and_prepare_sealing(chain);
 		trace!(target: "miner", "map_sealing_work: sealing prepared");
 		let mut sealing_work = self.sealing_work.lock();
 		let ret = sealing_work.queue.use_last_ref();
 		trace!(target: "miner", "map_sealing_work: leaving use_last_ref={:?}", ret.as_ref().and_then(|b| b.as_closed()).map(|b| b.block().fields().header.hash()));
-		ret.and_then(|b| b.as_closed()).map(f)
+		ret.map(|b| f(b.as_block()))
 	}
 
 	fn submit_seal(&self, chain: &MiningBlockChainClient, pow_hash: H256, seal: Vec<Bytes>) -> Result<(), Error> {

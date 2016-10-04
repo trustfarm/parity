@@ -34,7 +34,7 @@ use util::{FromHex, Mutex};
 use ethcore::account_provider::AccountProvider;
 use ethcore::client::{MiningBlockChainClient, BlockID, TransactionID, UncleID};
 use ethcore::header::Header as BlockHeader;
-use ethcore::block::{IsBlock, ClosedBlock};
+use ethcore::block::{Block as EthBlock};
 use ethcore::views::*;
 use ethcore::Seal;
 use ethcore::transaction::{Transaction as EthTransaction, SignedTransaction, Action};
@@ -194,7 +194,7 @@ impl<C, S: ?Sized, M, EM> EthClient<C, S, M, EM> where
 	}
 
 	fn return_block_data<F>(&self, f: F) -> Result<Value, Error>
-		where F: FnOnce(&ClosedBlock) -> Result<Value, Error> {
+		where F: FnOnce(&EthBlock) -> Result<Value, Error> {
 
 		let client = take_weak!(self.client);
 		// check if we're still syncing and return empty strings in that case
@@ -549,13 +549,13 @@ impl<C, S: ?Sized, M, EM> Eth for EthClient<C, S, M, EM> where
 	fn work(&self, params: Params) -> Result<Value, Error> {
 		try!(self.active());
 		try!(expect_no_params(params));
-		self.return_block_data(|b| to_value(&encode(b.block().header()).to_hex()))
+		self.return_block_data(|b| to_value(&encode(&b.header).to_hex()))
 	}
 
 	fn block_template(&self, params: Params) -> Result<Value, Error> {
 		try!(self.active());
 		try!(expect_no_params(params));
-		self.return_block_data(|b| to_value(&b.base().rlp_bytes(Seal::Without).to_hex()))
+		self.return_block_data(|b| to_value(&b.rlp_bytes(Seal::Without).to_hex()))
 	}
 
 	fn submit_work(&self, params: Params) -> Result<Value, Error> {
