@@ -549,7 +549,7 @@ impl<C, S: ?Sized, M, EM> Eth for EthClient<C, S, M, EM> where
 	fn work(&self, params: Params) -> Result<Value, Error> {
 		try!(self.active());
 		try!(expect_no_params(params));
-		self.return_block_data(|b| to_value(&encode(&b.header).to_hex()))
+		self.return_block_data(|b| to_value(&b.header.rlp(Seal::Without).to_hex()))
 	}
 
 	fn block_template(&self, params: Params) -> Result<Value, Error> {
