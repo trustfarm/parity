@@ -37,7 +37,6 @@ use params::{SpecType, Pruning, Switch, tracing_switch_to_bool, fatdb_switch_to_
 use helpers::{to_client_config, execute_upgrades};
 use dir::Directories;
 use user_defaults::UserDefaults;
-use fdlimit;
 use ethcore_private_tx;
 use db;
 
@@ -178,8 +177,6 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 
 	// load user defaults
 	let user_defaults = UserDefaults::load(&user_defaults_path)?;
-
-	fdlimit::raise_fd_limit();
 
 	// select pruning algorithm
 	let algorithm = cmd.pruning.to_algorithm(&user_defaults);
@@ -327,8 +324,6 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 
 	// load user defaults
 	let mut user_defaults = UserDefaults::load(&user_defaults_path)?;
-
-	fdlimit::raise_fd_limit();
 
 	// select pruning algorithm
 	let algorithm = cmd.pruning.to_algorithm(&user_defaults);
@@ -520,8 +515,6 @@ fn start_client(
 
 	// load user defaults
 	let user_defaults = UserDefaults::load(&user_defaults_path)?;
-
-	fdlimit::raise_fd_limit();
 
 	// select pruning algorithm
 	let algorithm = pruning.to_algorithm(&user_defaults);
