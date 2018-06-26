@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -445,6 +445,7 @@ impl HeaderChain {
 		let raw = header.encoded().into_inner();
 		transaction.put_vec(self.col, &hash[..], raw);
 
+		// TODO: For engines when required, use cryptoeconomic guarantees.
 		let (best_num, is_new_best) = {
 			let cur_best = self.best_block.read();
 			if cur_best.total_difficulty < total_difficulty {

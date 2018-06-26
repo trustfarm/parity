@@ -19,6 +19,9 @@
 //! Spawns an Ethereum network instance and attaches the Whisper protocol RPCs to it.
 //!
 
+#![warn(missing_docs)]
+#![cfg_attr(feature = "cargo-clippy", deny(clippy, clippy_pedantic))]
+
 extern crate docopt;
 extern crate ethcore_network_devp2p as devp2p;
 extern crate ethcore_network as net;
@@ -170,12 +173,12 @@ impl From<String> for Error {
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		match *self {
-			Error::SockAddr(ref e) => write!(f, "SockAddrError: {}", e),
-			Error::Docopt(ref e) => write!(f, "DocoptError: {}", e),
-			Error::Io(ref e) => write!(f, "IoError: {}", e),
-			Error::JsonRpc(ref e) => write!(f, "JsonRpcError: {:?}", e),
-			Error::Network(ref e) => write!(f, "NetworkError: {}", e),
-			Error::Logger(ref e) => write!(f, "LoggerError: {}", e),
+			Error::SockAddr(ref e) => write!(f, "{}", e),
+			Error::Docopt(ref e) => write!(f, "{}", e),
+			Error::Io(ref e) => write!(f, "{}", e),
+			Error::JsonRpc(ref e) => write!(f, "{:?}", e),
+			Error::Network(ref e) => write!(f, "{}", e),
+			Error::Logger(ref e) => write!(f, "{}", e),
 		}
 	}
 }
@@ -187,11 +190,12 @@ fn main() {
 		Ok(_) => {
 			println!("whisper-cli terminated");
 			process::exit(1);
-		}
+		},
+		Err(Error::Docopt(ref e)) => e.exit(),
 		Err(err) => {
 			println!("{}", err);
 			process::exit(1);
-		},
+		}
 	}
 }
 
@@ -215,13 +219,13 @@ fn execute<S, I>(command: I) -> Result<(), Error> where I: IntoIterator<Item=S>,
 	let network = devp2p::NetworkService::new(net::NetworkConfiguration::new_local(), None)?;
 
 	// Start network service
-	network.start()?;
+	network.start().map_err(|(err, _)| err)?;
 
 	// Attach whisper protocol to the network service
-	network.register_protocol(whisper_network_handler.clone(), whisper::net::PROTOCOL_ID, whisper::net::PACKET_COUNT,
+	network.register_protocol(whisper_network_handler.clone(), whisper::net::PROTOCOL_ID,
 							  whisper::net::SUPPORTED_VERSIONS)?;
 	network.register_protocol(Arc::new(whisper::net::ParityExtensions), whisper::net::PARITY_PROTOCOL_ID,
-							  whisper::net::PACKET_COUNT, whisper::net::SUPPORTED_VERSIONS)?;
+							  whisper::net::SUPPORTED_VERSIONS)?;
 
 	// Request handler
 	let mut io = MetaIoHandler::default();
@@ -251,7 +255,6 @@ fn initialize_logger(log_level: String) -> Result<(), String> {
 	log::setup_log(&l)?;
 	Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {

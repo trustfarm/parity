@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ use util::{DatabaseKey, DatabaseValueView, DatabaseValueRef};
 /// the removals actually take effect.
 ///
 /// journal format:
-/// ```
+/// ```text
 /// [era, 0] => [ id, [insert_0, ...], [remove_0, ...] ]
 /// [era, 1] => [ id, [insert_0, ...], [remove_0, ...] ]
 /// [era, n] => [ ... ]

@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -35,9 +35,9 @@ use unexpected::{OutOfBounds, Mismatch};
 use client::EngineClient;
 use bytes::Bytes;
 use error::{Error, BlockError};
-use header::{Header, BlockNumber};
+use header::{Header, BlockNumber, ExtendedHeader};
 use rlp::Rlp;
-use ethkey::{self, Message, Signature};
+use ethkey::{self, Password, Message, Signature};
 use account_provider::AccountProvider;
 use block::*;
 use engines::{Engine, Seal, EngineError, ConstructedVerifier};
@@ -359,7 +359,6 @@ impl Tendermint {
 			&& lock_change_view < self.view.load(AtomicOrdering::SeqCst)
 	}
 
-
 	fn has_enough_any_votes(&self) -> bool {
 		let step_votes = self.votes.count_round_votes(&VoteStep::new(self.height.load(AtomicOrdering::SeqCst), self.view.load(AtomicOrdering::SeqCst), *self.step.read()));
 		self.check_above_threshold(step_votes).is_ok()
@@ -530,7 +529,7 @@ impl Engine<EthereumMachine> for Tendermint {
 		Ok(())
 	}
 
-	fn on_new_block(&self, block: &mut ExecutedBlock, epoch_begin: bool) -> Result<(), Error> {
+	fn on_new_block(&self, block: &mut ExecutedBlock, epoch_begin: bool, _ancestry: &mut Iterator<Item=ExtendedHeader>) -> Result<(), Error> {
 		if !epoch_begin { return Ok(()) }
 
 		// genesis is never a new block, but might as well check.
@@ -678,7 +677,7 @@ impl Engine<EthereumMachine> for Tendermint {
 		}
 	}
 
-	fn set_signer(&self, ap: Arc<AccountProvider>, address: Address, password: String) {
+	fn set_signer(&self, ap: Arc<AccountProvider>, address: Address, password: Password) {
 		{
 			self.signer.write().set(ap, address, password);
 		}
@@ -765,6 +764,10 @@ impl Engine<EthereumMachine> for Tendermint {
 		*self.client.write() = Some(client.clone());
 		self.validators.register_client(client);
 	}
+
+	fn fork_choice(&self, new: &ExtendedHeader, current: &ExtendedHeader) -> super::ForkChoice {
+		super::total_difficulty_fork_choice(new, current)
+	}
 }
 
 #[cfg(test)]
@@ -800,7 +803,7 @@ mod tests {
 		let db = spec.ensure_db_good(db, &Default::default()).unwrap();
 		let genesis_header = spec.genesis_header();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(spec.engine.as_ref(), Default::default(), false, db.boxed_clone(), &genesis_header, last_hashes, proposer, (3141562.into(), 31415620.into()), vec![], false).unwrap();
+		let b = OpenBlock::new(spec.engine.as_ref(), Default::default(), false, db.boxed_clone(), &genesis_header, last_hashes, proposer, (3141562.into(), 31415620.into()), vec![], false, &mut Vec::new().into_iter()).unwrap();
 		let b = b.close();
 		if let Seal::Proposal(seal) = spec.engine.generate_seal(b.block(), &genesis_header) {
 			(b, seal)
@@ -828,7 +831,7 @@ mod tests {
 	}
 
 	fn insert_and_unlock(tap: &Arc<AccountProvider>, acc: &str) -> Address {
-		let addr = tap.insert_account(keccak(acc).into(), acc).unwrap();
+		let addr = tap.insert_account(keccak(acc).into(), &acc.into()).unwrap();
 		tap.unlock_account_permanently(addr, acc.into()).unwrap();
 		addr
 	}

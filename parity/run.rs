@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ use miner::external::ExternalMiner;
 use node_filter::NodeFilter;
 use node_health;
 use parity_reactor::EventLoop;
-use parity_rpc::{NetworkSettings, informant, is_major_importing};
+use parity_rpc::{Origin, Metadata, NetworkSettings, informant, is_major_importing};
 use updater::{UpdatePolicy, Updater};
 use parity_version::version;
 use ethcore_private_tx::{ProviderConfig, EncryptorConfig, SecretStoreEncryptor};
@@ -56,12 +56,14 @@ use cache::CacheConfig;
 use user_defaults::UserDefaults;
 use dapps;
 use ipfs;
+use jsonrpc_core;
 use modules;
 use rpc;
 use rpc_apis;
 use secretstore;
 use signer;
 use db;
+use ethkey::Password;
 
 // how often to take periodic snapshots.
 const SNAPSHOT_PERIOD: u64 = 5000;
@@ -89,6 +91,7 @@ pub struct RunCmd {
 	pub logger_config: LogConfig,
 	pub miner_options: MinerOptions,
 	pub gas_price_percentile: usize,
+	pub poll_lifetime: u32,
 	pub ntp_servers: Vec<String>,
 	pub ws_conf: rpc::WsConfiguration,
 	pub http_conf: rpc::HttpConfiguration,
@@ -97,7 +100,6 @@ pub struct RunCmd {
 	pub network_id: Option<u64>,
 	pub warp_sync: bool,
 	pub warp_barrier: Option<u64>,
-	pub public_node: bool,
 	pub acc_conf: AccountsConfig,
 	pub gas_pricer_conf: GasPricerConfig,
 	pub miner_extras: MinerExtras,
@@ -112,13 +114,11 @@ pub struct RunCmd {
 	pub net_settings: NetworkSettings,
 	pub dapps_conf: dapps::Configuration,
 	pub ipfs_conf: ipfs::Configuration,
-	pub ui_conf: rpc::UiConfiguration,
 	pub secretstore_conf: secretstore::Configuration,
 	pub private_provider_conf: ProviderConfig,
 	pub private_encryptor_conf: EncryptorConfig,
 	pub private_tx_enabled: bool,
 	pub dapp: Option<String>,
-	pub ui: bool,
 	pub name: String,
 	pub custom_bootnodes: bool,
 	pub stratum: Option<stratum::Options>,
@@ -185,7 +185,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
 
 	// create dirs used by parity
-	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.ui_conf.enabled, cmd.secretstore_conf.enabled)?;
+	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.acc_conf.unlocked_accounts.len() == 0, cmd.secretstore_conf.enabled)?;
 
 	//print out running parity environment
 	print_running_environment(&spec.name, &cmd.dirs, &db_dirs, &cmd.dapps_conf);
@@ -221,7 +221,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	let db = db::open_db(&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
 						 &cmd.cache_config,
 						 &cmd.compaction,
-						 cmd.wal)?;
+						 cmd.wal).map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	let service = light_client::Service::start(config, &spec, fetch, db, cache.clone())
 		.map_err(|e| format!("Error starting light client: {}", e))?;
@@ -323,13 +323,10 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 			fetch: fetch.clone(),
 			pool: cpu_pool.clone(),
 			signer: signer_service.clone(),
-			ui_address: cmd.ui_conf.redirection_address(),
-			info_page_only: cmd.ui_conf.info_page_only,
 		})
 	};
 
 	let dapps_middleware = dapps::new(cmd.dapps_conf.clone(), dapps_deps.clone())?;
-	let ui_middleware = dapps::new_ui(cmd.ui_conf.enabled, dapps_deps)?;
 
 	// start RPCs
 	let dapps_service = dapps::service(&dapps_middleware);
@@ -355,6 +352,7 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 		whisper_rpc: whisper_factory,
 		private_tx_service: None, //TODO: add this to client.
 		gas_price_percentile: cmd.gas_price_percentile,
+		poll_lifetime: cmd.poll_lifetime
 	});
 
 	let dependencies = rpc::Dependencies {
@@ -369,10 +367,10 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 	};
 
 	// start rpc servers
+	let rpc_direct = rpc::setup_apis(rpc_apis::ApiSet::All, &dependencies);
 	let ws_server = rpc::new_ws(cmd.ws_conf, &dependencies)?;
 	let http_server = rpc::new_http("HTTP JSON-RPC", "jsonrpc", cmd.http_conf.clone(), &dependencies, dapps_middleware)?;
 	let ipc_server = rpc::new_ipc(cmd.ipc_conf, &dependencies)?;
-	let ui_server = rpc::new_http("Parity Wallet (UI)", "ui", cmd.ui_conf.clone().into(), &dependencies, ui_middleware)?;
 
 	// the informant
 	let informant = Arc::new(Informant::new(
@@ -390,9 +388,10 @@ fn execute_light_impl(cmd: RunCmd, logger: Arc<RotatingLogger>) -> Result<Runnin
 
 	Ok(RunningClient {
 		inner: RunningClientInner::Light {
+			rpc: rpc_direct,
 			informant,
 			client,
-			keep_alive: Box::new((event_loop, service, ws_server, http_server, ipc_server, ui_server)),
+			keep_alive: Box::new((event_loop, service, ws_server, http_server, ipc_server)),
 		}
 	})
 }
@@ -442,7 +441,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	execute_upgrades(&cmd.dirs.base, &db_dirs, algorithm, &cmd.compaction)?;
 
 	// create dirs used by parity
-	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.ui_conf.enabled, cmd.secretstore_conf.enabled)?;
+	cmd.dirs.create_dirs(cmd.dapps_conf.enabled, cmd.acc_conf.unlocked_accounts.len() == 0, cmd.secretstore_conf.enabled)?;
 
 	// run in daemon mode
 	if let Some(pid_file) = cmd.daemon {
@@ -537,7 +536,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	let engine_signer = cmd.miner_extras.engine_signer;
 	if engine_signer != Default::default() {
 		// Check if engine signer exists
-		if !account_provider.has_account(engine_signer).unwrap_or(false) {
+		if !account_provider.has_account(engine_signer) {
 			return Err(format!("Consensus signer account not found for the current chain. {}", build_create_account_hint(&cmd.spec, &cmd.dirs.keys)));
 		}
 
@@ -585,8 +584,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	// set network path.
 	net_conf.net_config_path = Some(db_dirs.network_path().to_string_lossy().into_owned());
 
-	let client_db = db::open_client_db(&client_path, &client_config)?;
 	let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
+	let client_db = restoration_db_handler.open(&client_path)
+		.map_err(|e| format!("Failed to open database {:?}", e))?;
 
 	// create client service.
 	let service = ClientService::start(
@@ -627,7 +627,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			}
 		};
 
-		let store = ::local_store::create(db, ::ethcore::db::COL_NODE_INFO, node_info);
+		let store = ::local_store::create(db.key_value().clone(), ::ethcore::db::COL_NODE_INFO, node_info);
 
 		if cmd.no_persistent_txqueue {
 			info!("Running without a persistent transaction queue.");
@@ -718,11 +718,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 	// set up dependencies for rpc servers
 	let rpc_stats = Arc::new(informant::RpcStats::default());
-	let secret_store = match cmd.public_node {
-		true => None,
-		false => Some(account_provider.clone())
-	};
-
+	let secret_store = account_provider.clone();
 	let signer_service = Arc::new(signer::new_service(&cmd.ws_conf, &cmd.logger_config));
 
 	// the dapps server
@@ -758,12 +754,9 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 			fetch: fetch.clone(),
 			pool: cpu_pool.clone(),
 			signer: signer_service.clone(),
-			ui_address: cmd.ui_conf.redirection_address(),
-			info_page_only: cmd.ui_conf.info_page_only,
 		})
 	};
 	let dapps_middleware = dapps::new(cmd.dapps_conf.clone(), dapps_deps.clone())?;
-	let ui_middleware = dapps::new_ui(cmd.ui_conf.enabled, dapps_deps)?;
 
 	let dapps_service = dapps::service(&dapps_middleware);
 	let deps_for_rpc_apis = Arc::new(rpc_apis::FullDependencies {
@@ -790,6 +783,7 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 		whisper_rpc: whisper_factory,
 		private_tx_service: Some(private_tx_service.clone()),
 		gas_price_percentile: cmd.gas_price_percentile,
+		poll_lifetime: cmd.poll_lifetime,
 	});
 
 	let dependencies = rpc::Dependencies {
@@ -805,11 +799,10 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 	};
 
 	// start rpc servers
+	let rpc_direct = rpc::setup_apis(rpc_apis::ApiSet::All, &dependencies);
 	let ws_server = rpc::new_ws(cmd.ws_conf.clone(), &dependencies)?;
 	let ipc_server = rpc::new_ipc(cmd.ipc_conf, &dependencies)?;
 	let http_server = rpc::new_http("HTTP JSON-RPC", "jsonrpc", cmd.http_conf.clone(), &dependencies, dapps_middleware)?;
-	// the ui server
-	let ui_server = rpc::new_http("UI WALLET", "ui", cmd.ui_conf.clone().into(), &dependencies, ui_middleware)?;
 
 	// secret store key server
 	let secretstore_deps = secretstore::Dependencies {
@@ -878,9 +871,11 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 
 	Ok(RunningClient {
 		inner: RunningClientInner::Full {
+			rpc: rpc_direct,
 			informant,
 			client,
-			keep_alive: Box::new((watcher, service, updater, ws_server, http_server, ipc_server, ui_server, secretstore_key_server, ipfs_server, event_loop)),
+			client_service: Arc::new(service),
+			keep_alive: Box::new((watcher, updater, ws_server, http_server, ipc_server, secretstore_key_server, ipfs_server, event_loop)),
 		}
 	})
 }
@@ -890,42 +885,68 @@ fn execute_impl<Cr, Rr>(cmd: RunCmd, logger: Arc<RotatingLogger>, on_client_rq: 
 /// Should be destroyed by calling `shutdown()`, otherwise execution will continue in the
 /// background.
 pub struct RunningClient {
-	inner: RunningClientInner
+	inner: RunningClientInner,
 }
 
 enum RunningClientInner {
 	Light {
+		rpc: jsonrpc_core::MetaIoHandler<Metadata, informant::Middleware<rpc_apis::LightClientNotifier>>,
 		informant: Arc<Informant<LightNodeInformantData>>,
 		client: Arc<LightClient>,
 		keep_alive: Box<Any>,
 	},
 	Full {
+		rpc: jsonrpc_core::MetaIoHandler<Metadata, informant::Middleware<informant::ClientNotifier>>,
 		informant: Arc<Informant<FullNodeInformantData>>,
 		client: Arc<Client>,
+		client_service: Arc<ClientService>,
 		keep_alive: Box<Any>,
 	},
 }
 
 impl RunningClient {
+	/// Performs a synchronous RPC query.
+	/// Blocks execution until the result is ready.
+	pub fn rpc_query_sync(&self, request: &str) -> Option<String> {
+		let metadata = Metadata {
+			origin: Origin::CApi,
+			session: None,
+		};
+
+		match self.inner {
+			RunningClientInner::Light { ref rpc, .. } => {
+				rpc.handle_request_sync(request, metadata)
+			},
+			RunningClientInner::Full { ref rpc, .. } => {
+				rpc.handle_request_sync(request, metadata)
+			},
+		}
+	}
+
 	/// Shuts down the client.
 	pub fn shutdown(self) {
 		match self.inner {
-			RunningClientInner::Light { informant, client, keep_alive } => {
+			RunningClientInner::Light { rpc, informant, client, keep_alive } => {
 				// Create a weak reference to the client so that we can wait on shutdown
 				// until it is dropped
 				let weak_client = Arc::downgrade(&client);
+				drop(rpc);
 				drop(keep_alive);
 				informant.shutdown();
 				drop(informant);
 				drop(client);
 				wait_for_drop(weak_client);
 			},
-			RunningClientInner::Full { informant, client, keep_alive } => {
+			RunningClientInner::Full { rpc, informant, client, client_service, keep_alive } => {
 				info!("Finishing work, please wait...");
 				// Create a weak reference to the client so that we can wait on shutdown
 				// until it is dropped
 				let weak_client = Arc::downgrade(&client);
+				// Shutdown and drop the ServiceClient
+				client_service.shutdown();
+				drop(client_service);
 				// drop this stuff as soon as exit detected.
+				drop(rpc);
 				drop(keep_alive);
 				// to make sure timer does not spawn requests while shutdown is in progress
 				informant.shutdown();
@@ -982,7 +1003,7 @@ fn print_running_environment(spec_name: &String, dirs: &Directories, db_dirs: &D
 	info!("Path to dapps {}", Colour::White.bold().paint(dapps_conf.dapps_path.to_string_lossy().into_owned()));
 }
 
-fn prepare_account_provider(spec: &SpecType, dirs: &Directories, data_dir: &str, cfg: AccountsConfig, passwords: &[String]) -> Result<AccountProvider, String> {
+fn prepare_account_provider(spec: &SpecType, dirs: &Directories, data_dir: &str, cfg: AccountsConfig, passwords: &[Password]) -> Result<AccountProvider, String> {
 	use ethcore::ethstore::EthStore;
 	use ethcore::ethstore::accounts_dir::RootDiskDirectory;
 
@@ -1012,7 +1033,7 @@ fn prepare_account_provider(spec: &SpecType, dirs: &Directories, data_dir: &str,
 
 	for a in cfg.unlocked_accounts {
 		// Check if the account exists
-		if !account_provider.has_account(a).unwrap_or(false) {
+		if !account_provider.has_account(a) {
 			return Err(format!("Account {} not found for the current chain. {}", a, build_create_account_hint(spec, &dirs.keys)));
 		}
 
@@ -1037,8 +1058,8 @@ fn prepare_account_provider(spec: &SpecType, dirs: &Directories, data_dir: &str,
 fn insert_dev_account(account_provider: &AccountProvider) {
 	let secret: ethkey::Secret = "4d5db4107d237df6a3d58ee5f70ae63d73d7658d4026f2eefd2f204c81682cb7".into();
 	let dev_account = ethkey::KeyPair::from_secret(secret.clone()).expect("Valid secret produces valid key;qed");
-	if let Ok(false) = account_provider.has_account(dev_account.address()) {
-		match account_provider.insert_account(secret, "") {
+	if !account_provider.has_account(dev_account.address()) {
+		match account_provider.insert_account(secret, &Password::from(String::new())) {
 			Err(e) => warn!("Unable to add development account: {}", e),
 			Ok(address) => {
 				let _ = account_provider.set_account_name(address.clone(), "Development Account".into());

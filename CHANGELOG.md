@@ -1,22 +1,170 @@
-## Parity [v1.11.0](https://github.com/paritytech/parity/releases/tag/v1.10.0) (2018-05-09)
+## Parity [v1.11.4](https://github.com/paritytech/parity/releases/tag/v1.11.4) (2018-06-20)
 
-This is the Parity 1.11.0-beta release! Hurray!
+Parity 1.11.4 is a bug-fix release to improve performance and stability.
+
+The full list of included changes:
+
+- Backports ([#8916](https://github.com/paritytech/parity/pull/8916))
+  - `Duration_ns: u64 -> duration: Duration` ([#8457](https://github.com/paritytech/parity/pull/8457))
+    - Duration_ns: u64 -> duration: Duration
+    - Format on millis {:.2} -> {}
+  - Keep all enacted blocks notify in order ([#8524](https://github.com/paritytech/parity/pull/8524))
+    - Keep all enacted blocks notify in order
+    - Collect is unnecessary
+    - Update ChainNotify to use ChainRouteType
+    - Fix all ethcore fn defs
+    - Wrap the type within ChainRoute
+    - Fix private-tx and sync api
+    - Fix secret_store API
+    - Fix updater API
+    - Fix rpc api
+    - Fix informant api
+    - Eagerly cache enacted/retracted and remove contain_enacted/retracted
+    - Fix indent
+    - Tests: should use full expr form for struct constructor
+    - Use into_enacted_retracted to further avoid copy
+    - Typo: not a function
+    - Rpc/tests: ChainRoute -> ChainRoute::new
+  - Handle removed logs in filter changes and add geth compatibility field ([#8796](https://github.com/paritytech/parity/pull/8796))
+    - Add removed geth compatibility field in log
+    - Fix mocked tests
+    - Add field block hash in PollFilter
+    - Store last block hash info for log filters
+    - Implement canon route
+    - Use canon logs for fetching reorg logs
+    - Make sure removed flag is set
+    - Address grumbles
+  - Fixed AuthorityRound deadlock on shutdown, closes [#8088](https://github.com/paritytech/parity/issues/8088) ([#8803](https://github.com/paritytech/parity/pull/8803))
+  - Ci: Fix docker tags ([#8822](https://github.com/paritytech/parity/pull/8822))
+    - Scripts: enable docker builds for beta and stable
+    - Scripts: docker latest should be beta not master
+    - Scripts: docker latest is master
+  - Ethcore: fix ancient block error msg handling ([#8832](https://github.com/paritytech/parity/pull/8832))
+  - Disable parallel verification and skip verifiying already imported txs. ([#8834](https://github.com/paritytech/parity/pull/8834))
+    - Reject transactions that are already in pool without verifying them.
+    - Avoid verifying already imported transactions.
+  - Fix concurrent access to signer queue ([#8854](https://github.com/paritytech/parity/pull/8854))
+    - Fix concurrent access to signer queue
+    - Put request back to the queue if confirmation failed
+    - Typo: fix docs and rename functions to be more specific
+    - Change trace info "Transaction" -> "Request"
+  - Don't allocate in expect_valid_rlp unless necessary ([#8867](https://github.com/paritytech/parity/pull/8867))
+    - Don't allocate via format! in case there's no error
+    - Fix test?
+  - Fixed ipc leak, closes [#8774](https://github.com/paritytech/parity/issues/8774) ([#8876](https://github.com/paritytech/parity/pull/8876))
+  - Add new ovh bootnodes and fix port for foundation bootnode 3.2 ([#8886](https://github.com/paritytech/parity/pull/8886))
+    - Add new ovh bootnodes and fix port for foundation bootnode 3.2
+    - Remove old bootnodes.
+    - Remove duplicate 1118980bf48b0a3640bdba04e0fe78b1add18e1cd99bf22d53daac1fd9972ad650df52176e7c7d89d1114cfef2bc23a2959aa54998a46afcf7d91809f0855082
+  - Block 0 is valid in queries ([#8891](https://github.com/paritytech/parity/pull/8891))
+  - Add ETC Cooperative-run load balanced parity node ([#8892](https://github.com/paritytech/parity/pull/8892))
+  - Minor fix in chain supplier and light provider ([#8906](https://github.com/paritytech/parity/pull/8906))
+    - Fix chain supplier increment
+    - Fix light provider block_headers
+  - Check whether we need resealing in miner and unwrap has_account in account_provider ([#8853](https://github.com/paritytech/parity/pull/8853))
+    - Remove unused Result wrap in has_account
+    - Check whether we need to reseal for external transactions
+    - Fix reference to has_account interface
+    - Typo: missing )
+    - Refactor duplicates to prepare_and_update_sealing
+    - Fix build
+  - Allow disabling local-by-default for transactions with new config entry ([#8882](https://github.com/paritytech/parity/pull/8882))
+    - Add tx_queue_allow_unknown_local config option
+    - Refactor flag name + don't change import_own_tx behaviour
+    - Add fn to TestMinerService
+    - Avoid race condition from trusted sources
+- Parity-version: beta release 1.11.4 ([#8856](https://github.com/paritytech/parity/pull/8856))
+  - Cherry-pick network-specific release flag ([#8821](https://github.com/paritytech/parity/pull/8821))
+  - Parity-version: bump beta to 1.11.4
+  - Parity-version: remove merge leftovers
+
+## Parity [v1.11.3](https://github.com/paritytech/parity/releases/tag/v1.11.3) (2018-06-06)
+
+Parity 1.11.3 is a security-relevant release. Please upgrade your nodes as soon as possible to [v1.10.6](https://github.com/paritytech/parity/releases/tag/v1.10.6) or [v1.11.3](https://github.com/paritytech/parity/releases/tag/v1.11.3).
+
+The full list of included changes:
+
+- Parity-version: bump beta to 1.11.3 ([#8806](https://github.com/paritytech/parity/pull/8806))
+  - Parity-version: bump beta to 1.11.3
+  - Disallow unsigned transactions in case EIP-86 is disabled ([#8802](https://github.com/paritytech/parity/pull/8802))
+  - Fix ancient blocks queue deadlock ([#8751](https://github.com/paritytech/parity/pull/8751))
+- Update shell32-sys to fix windows build ([#8792](https://github.com/paritytech/parity/pull/8792))
+- Backports ([#8785](https://github.com/paritytech/parity/pull/8785))
+  - Fix light sync with initial validator-set contract ([#8528](https://github.com/paritytech/parity/pull/8528))
+    - Fix #8468
+    - Use U256::max_value() instead
+    - Also change initial transaction gas
+  - Resumable warp-sync / Seed downloaded snapshots ([#8544](https://github.com/paritytech/parity/pull/8544))
+    - Start dividing sync chain : first supplier method
+    - WIP - updated chain sync supplier
+    - Finish refactoring the Chain Sync Supplier
+    - Create Chain Sync Requester
+    - Add Propagator for Chain Sync
+    - Add the Chain Sync Handler
+    - Move tests from mod -> handler
+    - Move tests to propagator
+    - Refactor SyncRequester arguments
+    - Refactoring peer fork header handler
+    - Fix wrong highest block number in snapshot sync
+    - Small refactor...
+    - Resume warp-sync downloaded chunks
+    - Refactoring the previous chunks import
+    - Address PR grumbles
+    - Fix not seeding current snapshot
+    - Update SnapshotService readiness check
+    - Early abort importing previous chunks
+    - Update Gitlab CI config
+    - SyncState back to Waiting when Manifest peers disconnect
+    - Revert GitLab CI changes
+    - Refactor resuming snapshots
+    - Revert "Refactor resuming snapshots"
+    - Update informant log
+    - Refactor resuming snapshots
+    - Update informant message : show chunks done
+  - Don't open Browser post-install on Mac ([#8641](https://github.com/paritytech/parity/pull/8641))
+  - Fix not downloading old blocks ([#8642](https://github.com/paritytech/parity/pull/8642))
+  - Fix PoW blockchains sealing notifications in chain_new_blocks ([#8656](https://github.com/paritytech/parity/pull/8656))
+  - Shutdown the Snapshot Service early ([#8658](https://github.com/paritytech/parity/pull/8658))
+    - Shutdown the Snapshot Service when shutting down the runner
+    - Rename `service` to `client_service`
+    - Fix tests
+  - Fix cli signer ([#8682](https://github.com/paritytech/parity/pull/8682))
+    - Update ethereum-types so `{:#x}` applies 0x prefix
+  - Set the request index to that of the current request ([#8683](https://github.com/paritytech/parity/pull/8683))
+    - Set the request index to that of the current request
+  - Network-devp2p: handle UselessPeer disconnect ([#8686](https://github.com/paritytech/parity/pull/8686))
+  - Fix local transactions policy. ([#8691](https://github.com/paritytech/parity/pull/8691))
+  - CI: Fixes for Android Pipeline ([#8745](https://github.com/paritytech/parity/pull/8745))
+    - Ci: Remove check for shared libraries in gitlab script
+    - Ci: allow android arm build to fail
+  - Custom Error Messages on ENFILE and EMFILE IO Errors ([#8744](https://github.com/paritytech/parity/pull/8744))
+    - Custom Error Messages on ENFILE and EMFILE IO Errors
+    - Use assert-matches for more readable tests
+    - Fix Wording and consistency
+  - Ethcore-sync: fix connection to peers behind chain fork block ([#8710](https://github.com/paritytech/parity/pull/8710))
+- Parity-version: bump beta to 1.11.2 ([#8750](https://github.com/paritytech/parity/pull/8750))
+  - Parity-version: bump beta to 1.11.2
+  - Parity-version: unset critical flag
+
+## Parity [v1.11.1](https://github.com/paritytech/parity/releases/tag/v1.11.1) (2018-05-15)
+
+This is the Parity 1.11.1-beta release! Hurray!
 
 Notable changes in reversed alphabetical order:
 
 - TOOLING: **Whisper CLI** [#8201](https://github.com/paritytech/parity/pull/8201)
   - `whisper-cli` is a standalone tool to communicate with the Whisper protocol.
   - It provides functionality to specify `whisper-pool-size`, `port` and `address` to use.
-  - All whisper RPC APIs are enabled and can be directly acessed.
+  - All whisper RPC APIs are enabled and can be directly accessed.
 - JSON-RPC API: **Return error in case eth_call returns VM errors** [#8448](https://github.com/paritytech/parity/pull/8448)
   - This changes the behaviors of `eth_call` to respect VM errors if any.
   - In case of `REVERT`, it will also return the reverted return data in hex format.
-- ENGINES: **Block reward contract** [#8419](https://github.com/paritytech/parity/pull/8419)
+- ENGINES: **Block Reward Contract** [#8419](https://github.com/paritytech/parity/pull/8419)
   - The _AuRa_ PoA engine has now support for having a contract to calculate the block rewards.
   - The engine passes a list of benefactors and reward types to the contract which then returns a list of addresses and respective rewards.
-- CORE: **Private transactions integration pr** [#6422](https://github.com/paritytech/parity/pull/6422)
+- CORE: **Private Transactions** [#6422](https://github.com/paritytech/parity/pull/6422)
   - Parity now provides a private transactions system.
-  - Please, check out our wiki to get and [overview and setup instructions](https://wiki.parity.io/Private-Transactions.html).
+  - Please, check out our wiki to get an [overview and setup instructions](https://wiki.parity.io/Private-Transactions.html).
 - CORE: **New Transaction Queue implementation** [#8074](https://github.com/paritytech/parity/pull/8074)
   - Verification is now done in parallel.
   - Previous queue had `O(1)` time to get pending set, but `O(n^2)` insertion time. And obviously insertion/removal happens much more often than retrieving the pending set (only for propagation and pending block building) Currently we have `O(n * log(senders))` pending set time (with cache) and `O(tx_per_sender)` (usually within `log(tx_per_sender)`) insertion time.
@@ -47,49 +195,156 @@ Notable changes in reversed alphabetical order:
 
 The full list of included changes:
 
+- Backports ([#8624](https://github.com/paritytech/parity/pull/8624))
+  - Trace precompiled contracts when the transfer value is not zero ([#8486](https://github.com/paritytech/parity/pull/8486))
+    - Trace precompiled contracts when the transfer value is not zero
+    - Add tests for precompiled CALL tracing
+    - Use byzantium test machine for the new test
+    - Add notes in comments on why we don't trace all precompiles
+    - Use is_transferred instead of transferred
+  - Return error if RLP size of transaction exceeds the limit ([#8473](https://github.com/paritytech/parity/pull/8473))
+    - Return error if RLP size of transaction exceeds the limit
+    - Review comments fixed
+    - RLP check moved to verifier, corresponding pool test added
+  - Don't block sync when importing old blocks ([#8530](https://github.com/paritytech/parity/pull/8530))
+    - Alter IO queueing.
+    - Don't require IoMessages to be Clone
+    - Ancient blocks imported via IoChannel.
+    - Get rid of private transactions io message.
+    - Get rid of deadlock and fix disconnected handler.
+    - Revert to old disconnect condition.
+    - Fix tests.
+    - Fix deadlock.
+  - Refactoring `ethcore-sync` - Fixing warp-sync barrier ([#8543](https://github.com/paritytech/parity/pull/8543))
+    - Start dividing sync chain : first supplier method
+    - WIP - updated chain sync supplier
+    - Finish refactoring the Chain Sync Supplier
+    - Create Chain Sync Requester
+    - Add Propagator for Chain Sync
+    - Add the Chain Sync Handler
+    - Move tests from mod -> handler
+    - Move tests to propagator
+    - Refactor SyncRequester arguments
+    - Refactoring peer fork header handler
+    - Fix wrong highest block number in snapshot sync
+    - Small refactor...
+    - Address PR grumbles
+    - Retry failed CI job
+    - Fix tests
+    - PR Grumbles
+  - Handle socket address parsing errors ([#8545](https://github.com/paritytech/parity/pull/8545))
+  - Fix packet count when talking with PAR2 peers ([#8555](https://github.com/paritytech/parity/pull/8555))
+    - Support diferent packet counts in different protocol versions.
+    - Fix light timeouts and eclipse protection.
+    - Fix devp2p tests.
+    - Fix whisper-cli compilation.
+    - Fix compilation.
+    - Fix ethcore-sync tests.
+    - Revert "Fix light timeouts and eclipse protection."
+    - Increase timeouts.
+  - Add whisper CLI to the pipelines ([#8578](https://github.com/paritytech/parity/pull/8578))
+    - Add whisper CLI to the pipelines
+    - Address todo, ref [#8579](https://github.com/paritytech/parity/pull/8579)
+  - Rename `whisper-cli binary` to `whisper` ([#8579](https://github.com/paritytech/parity/pull/8579))
+    - Rename whisper-cli binary to whisper
+    - Fix tests
+  - Remove manually added text to the errors ([#8595](https://github.com/paritytech/parity/pull/8595))
+  - Fix account list double 0x display ([#8596](https://github.com/paritytech/parity/pull/8596))
+    - Remove unused self import
+    - Fix account list double 0x display
+  - Fix BlockReward contract "arithmetic operation overflow" ([#8611](https://github.com/paritytech/parity/pull/8611))
+    - Fix BlockReward contract "arithmetic operation overflow"
+    - Add docs on how execute_as_system works
+    - Fix typo
+  - Rlp decode returns Result ([#8527](https://github.com/paritytech/parity/pull/8527))
+  - Remove expect ([#8536](https://github.com/paritytech/parity/pull/8536))
+    - Remove expect and propagate rlp::DecoderErrors as TrieErrors
+  - Decoding headers can fail ([#8570](https://github.com/paritytech/parity/pull/8570))
+    - Rlp::decode returns Result
+    - Fix journaldb to handle rlp::decode Result
+    - Fix ethcore to work with rlp::decode returning Result
+    - Light client handles rlp::decode returning Result
+    - Fix tests in rlp_derive
+    - Fix tests
+    - Cleanup
+    - Cleanup
+    - Allow panic rather than breaking out of iterator
+    - Let decoding failures when reading from disk blow up
+    - Syntax
+    - Fix the trivial grumbles
+    - Fix failing tests
+    - Make Account::from_rlp return Result
+    - Syntx, sigh
+    - Temp-fix for decoding failures
+    - Header::decode returns Result
+    - Do not continue reading from the DB when a value could not be read
+    - Fix tests
+    - Handle header decoding in light_sync
+    - Handling header decoding errors
+    - Let the DecodeError bubble up unchanged
+    - Remove redundant error conversion
+  - Fix compiler warning ([#8590](https://github.com/paritytech/parity/pull/8590))
+  - Attempt to fix intermittent test failures ([#8584](https://github.com/paritytech/parity/pull/8584))
+  - Block_header can fail so return Result ([#8581](https://github.com/paritytech/parity/pull/8581))
+    - Block_header can fail so return Result
+    - Restore previous return type based on feedback
+    - Fix failing doc tests running on non-code
+  - Block::decode() returns Result ([#8586](https://github.com/paritytech/parity/pull/8586))
+  - Gitlab test script fixes ([#8573](https://github.com/paritytech/parity/pull/8573))
+    - Exclude /docs from modified files.
+    - Ensure all references in the working tree are available
+    - Remove duplicated line from test script
+- Bump beta to 1.11.1 ([#8627](https://github.com/paritytech/parity/pull/8627))
+
+## Parity [v1.11.0](https://github.com/paritytech/parity/releases/tag/v1.11.0) (2018-05-09)
+
+This is the Parity 1.11.0-beta release! ~~Hurray!~~ This release has been pulled due to peering issues, please use 1.11.1-beta.
+
+The full list of included changes:
+
 - Backports ([#8558](https://github.com/paritytech/parity/pull/8558))
   - Fetching logs by hash in blockchain database ([#8463](https://github.com/paritytech/parity/pull/8463))
-	  - Fetch logs by hash in blockchain database
-	  - Fix tests
-	  - Add unit test for branch block logs fetching
-	  - Add docs that blocks must already be sorted
-	  - Handle branch block cases properly
-	  - typo: empty -> is_empty
-	  - Remove return_empty_if_none by using a closure
-	  - Use BTreeSet to avoid sorting again
-	  - Move is_canon to BlockChain
-	  - typo: pass value by reference
-	  - Use loop and wrap inside blocks to simplify the code
-	  - typo: missed a comment
+    - Fetch logs by hash in blockchain database
+    - Fix tests
+    - Add unit test for branch block logs fetching
+    - Add docs that blocks must already be sorted
+    - Handle branch block cases properly
+    - typo: empty -> is_empty
+    - Remove return_empty_if_none by using a closure
+    - Use BTreeSet to avoid sorting again
+    - Move is_canon to BlockChain
+    - typo: pass value by reference
+    - Use loop and wrap inside blocks to simplify the code
+    - typo: missed a comment
   - Pass on storage keys tracing to handle the case when it is not modified ([#8491](https://github.com/paritytech/parity/pull/8491))
-	  - Pass on storage keys even if it is not modified
-	  - typo: account and storage query
-	  - Fix tests
-	  - Use state query directly because of suicided accounts
-	  - Fix a RefCell borrow issue
-	  - Add tests for unmodified storage trace
-	  - Address grumbles
-	  - typo: remove unwanted empty line
-	  - ensure_cached compiles with the original signature
+    - Pass on storage keys even if it is not modified
+    - typo: account and storage query
+    - Fix tests
+    - Use state query directly because of suicided accounts
+    - Fix a RefCell borrow issue
+    - Add tests for unmodified storage trace
+    - Address grumbles
+    - typo: remove unwanted empty line
+    - ensure_cached compiles with the original signature
   - Update wasmi and pwasm-utils ([#8493](https://github.com/paritytech/parity/pull/8493))
-	  - Update wasmi to 0.2
-	  - Update pwasm-utils to 0.1.5
+    - Update wasmi to 0.2
+    - Update pwasm-utils to 0.1.5
   - Show imported messages for light client ([#8517](https://github.com/paritytech/parity/pull/8517))
   - Enable WebAssembly and Byzantium for Ellaism ([#8520](https://github.com/paritytech/parity/pull/8520))
-	  - Enable WebAssembly and Byzantium for Ellaism
-	  - Fix indentation
-	  - Remove empty lines
+    - Enable WebAssembly and Byzantium for Ellaism
+    - Fix indentation
+    - Remove empty lines
   - Don't panic in import_block if invalid rlp ([#8522](https://github.com/paritytech/parity/pull/8522))
-	  - Don't panic in import_block if invalid rlp
-	  - Remove redundant type annotation
-	  - Replace RLP header view usage with safe decoding
+    - Don't panic in import_block if invalid rlp
+    - Remove redundant type annotation
+    - Replace RLP header view usage with safe decoding
   - Node table sorting according to last contact data ([#8541](https://github.com/paritytech/parity/pull/8541))
-	  - network-devp2p: sort nodes in node table using last contact data
-	  - network-devp2p: rename node contact types in node table json output
-	  - network-devp2p: fix node table tests
-	  - network-devp2p: note node failure when failed to establish connection
-	  - network-devp2p: handle UselessPeer error
-	  - network-devp2p: note failure when marking node as useless
+    - network-devp2p: sort nodes in node table using last contact data
+    - network-devp2p: rename node contact types in node table json output
+    - network-devp2p: fix node table tests
+    - network-devp2p: note node failure when failed to establish connection
+    - network-devp2p: handle UselessPeer error
+    - network-devp2p: note failure when marking node as useless
 - Betalize 1.11 :) ([#8475](https://github.com/paritytech/parity/pull/8475))
   - Betalize 1.11 :)
   - Update Gitlab scripts

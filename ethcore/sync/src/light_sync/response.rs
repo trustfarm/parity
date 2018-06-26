@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! Helpers for decoding and verifying responses for headers.
 
-use ethcore::{self, encoded, header::Header};
+use ethcore::{encoded, header::Header};
 use ethereum_types::H256;
 use light::request::{HashOrNumber, CompleteHeadersRequest as HeadersRequest};
 use rlp::DecoderError;

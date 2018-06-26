@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -206,7 +206,7 @@ impl Block {
 	pub fn header_view(&self) -> HeaderView { self.view().header_view() }
 
 	/// Decode to a full block.
-	pub fn decode(&self) -> FullBlock { ::rlp::decode(&self.0).expect("decoding failure") }
+	pub fn decode(&self) -> Result<FullBlock, rlp::DecoderError> { rlp::decode(&self.0) }
 
 	/// Decode the header.
 	pub fn decode_header(&self) -> FullHeader { self.view().rlp().val_at(0) }
