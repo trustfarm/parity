@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ pub mod pool_client;
 pub mod stratum;
 
 pub use self::miner::{Miner, MinerOptions, Penalization, PendingSet, AuthoringParams};
+pub use ethcore_miner::pool::PendingOrdering;
 
 use std::sync::Arc;
 use std::collections::BTreeMap;
@@ -45,6 +46,7 @@ use header::{BlockNumber, Header};
 use receipt::{RichReceipt, Receipt};
 use transaction::{self, UnverifiedTransaction, SignedTransaction, PendingTransaction};
 use state::StateInfo;
+use ethkey::Password;
 
 /// Provides methods to verify incoming external transactions
 pub trait TransactionVerifierClient: Send + Sync
@@ -81,7 +83,6 @@ pub trait MinerService : Send + Sync {
 	fn update_sealing<C>(&self, chain: &C)
 		where C: BlockChain + CallContract + BlockProducer + SealedBlockImporter + Nonce + Sync;
 
-
 	// Notifications
 
 	/// Called when blocks are imported to chain, updates transactions queue.
@@ -89,7 +90,6 @@ pub trait MinerService : Send + Sync {
 	/// so we shouldn't attempt creating new block again.
 	fn chain_new_blocks<C>(&self, chain: &C, imported: &[H256], invalid: &[H256], enacted: &[H256], retracted: &[H256], is_internal_import: bool)
 		where C: BlockChainClient;
-
 
 	// Pending block
 
@@ -125,7 +125,7 @@ pub trait MinerService : Send + Sync {
 	/// Set info necessary to sign consensus messages and block authoring.
 	///
 	/// On PoW password is optional.
-	fn set_author(&self, address: Address, password: Option<String>) -> Result<(), ::account_provider::SignError>;
+	fn set_author(&self, address: Address, password: Option<Password>) -> Result<(), ::account_provider::SignError>;
 
 	// Transaction Pool
 
@@ -136,6 +136,12 @@ pub trait MinerService : Send + Sync {
 
 	/// Imports own (node owner) transaction to queue.
 	fn import_own_transaction<C>(&self, chain: &C, transaction: PendingTransaction)
+		-> Result<(), transaction::Error>
+		where C: BlockChainClient;
+
+	/// Imports transactions from potentially external sources, with behaviour determined
+	/// by the config flag `tx_queue_allow_unfamiliar_locals`
+	fn import_claimed_local_transaction<C>(&self, chain: &C, transaction: PendingTransaction, trusted: bool)
 		-> Result<(), transaction::Error>
 		where C: BlockChainClient;
 
@@ -158,10 +164,12 @@ pub trait MinerService : Send + Sync {
 	fn next_nonce<C>(&self, chain: &C, address: &Address) -> U256
 		where C: Nonce + Sync;
 
-	/// Get a list of all ready transactions.
+	/// Get a list of all ready transactions either ordered by priority or unordered (cheaper).
 	///
 	/// Depending on the settings may look in transaction pool or only in pending block.
-	fn ready_transactions<C>(&self, chain: &C) -> Vec<Arc<VerifiedTransaction>>
+	/// If you don't need a full set of transactions, you can add `max_len` and create only a limited set of
+	/// transactions.
+	fn ready_transactions<C>(&self, chain: &C, max_len: usize, ordering: PendingOrdering) -> Vec<Arc<VerifiedTransaction>>
 		where C: ChainInfo + Nonce + Sync;
 
 	/// Get a list of all transactions in the pool (some of them might not be ready for inclusion yet).

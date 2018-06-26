@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -127,15 +127,15 @@ known_heap_size!(0, PeerInfo);
 pub type PacketDecodeError = DecoderError;
 
 /// 63 version of Ethereum protocol.
-pub const ETH_PROTOCOL_VERSION_63: u8 = 63;
+pub const ETH_PROTOCOL_VERSION_63: (u8, u8) = (63, 0x11);
 /// 62 version of Ethereum protocol.
-pub const ETH_PROTOCOL_VERSION_62: u8 = 62;
-/// 1 version of Parity protocol.
-pub const PAR_PROTOCOL_VERSION_1: u8 = 1;
+pub const ETH_PROTOCOL_VERSION_62: (u8, u8) = (62, 0x11);
+/// 1 version of Parity protocol and the packet count.
+pub const PAR_PROTOCOL_VERSION_1: (u8, u8) = (1, 0x15);
 /// 2 version of Parity protocol (consensus messages added).
-pub const PAR_PROTOCOL_VERSION_2: u8 = 2;
+pub const PAR_PROTOCOL_VERSION_2: (u8, u8) = (2, 0x16);
 /// 3 version of Parity protocol (private transactions messages added).
-pub const PAR_PROTOCOL_VERSION_3: u8 = 3;
+pub const PAR_PROTOCOL_VERSION_3: (u8, u8) = (3, 0x18);
 
 pub const MAX_BODIES_TO_SEND: usize = 256;
 pub const MAX_HEADERS_TO_SEND: usize = 512;
@@ -149,6 +149,10 @@ const MAX_NEW_HASHES: usize = 64;
 const MAX_NEW_BLOCK_AGE: BlockNumber = 20;
 // maximal packet size with transactions (cannot be greater than 16MB - protocol limitation).
 const MAX_TRANSACTION_PACKET_SIZE: usize = 8 * 1024 * 1024;
+// Maximal number of transactions queried from miner to propagate.
+// This set is used to diff with transactions known by the peer and
+// we will send a difference of length up to `MAX_TRANSACTIONS_TO_PROPAGATE`.
+const MAX_TRANSACTIONS_TO_QUERY: usize = 4096;
 // Maximal number of transactions in sent in single packet.
 const MAX_TRANSACTIONS_TO_PROPAGATE: usize = 64;
 // Min number of blocks to be behind for a snapshot sync
@@ -169,8 +173,6 @@ pub const NODE_DATA_PACKET: u8 = 0x0e;
 pub const GET_RECEIPTS_PACKET: u8 = 0x0f;
 pub const RECEIPTS_PACKET: u8 = 0x10;
 
-pub const ETH_PACKET_COUNT: u8 = 0x11;
-
 pub const GET_SNAPSHOT_MANIFEST_PACKET: u8 = 0x11;
 pub const SNAPSHOT_MANIFEST_PACKET: u8 = 0x12;
 pub const GET_SNAPSHOT_DATA_PACKET: u8 = 0x13;
@@ -178,8 +180,6 @@ pub const SNAPSHOT_DATA_PACKET: u8 = 0x14;
 pub const CONSENSUS_DATA_PACKET: u8 = 0x15;
 const PRIVATE_TRANSACTION_PACKET: u8 = 0x16;
 const SIGNED_PRIVATE_TRANSACTION_PACKET: u8 = 0x17;
-
-pub const SNAPSHOT_SYNC_PACKET_COUNT: u8 = 0x18;
 
 const MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD: usize = 3;
 
@@ -249,9 +249,12 @@ pub struct SyncStatus {
 impl SyncStatus {
 	/// Indicates if snapshot download is in progress
 	pub fn is_snapshot_syncing(&self) -> bool {
-		self.state == SyncState::SnapshotManifest
-			|| self.state == SyncState::SnapshotData
-			|| self.state == SyncState::SnapshotWaiting
+		match self.state {
+			SyncState::SnapshotManifest |
+				SyncState::SnapshotData |
+				SyncState::SnapshotWaiting => true,
+			_ => false,
+		}
 	}
 
 	/// Returns max no of peers to display in informants
@@ -295,6 +298,8 @@ pub enum BlockSet {
 pub enum ForkConfirmation {
 	/// Fork block confirmation pending.
 	Unconfirmed,
+	/// Peer's chain is too short to confirm the fork.
+	TooShort,
 	/// Fork is confirmed.
 	Confirmed,
 }
@@ -453,7 +458,7 @@ impl ChainSync {
 		let last_imported_number = self.new_blocks.last_imported_block_number();
 		SyncStatus {
 			state: self.state.clone(),
-			protocol_version: ETH_PROTOCOL_VERSION_63,
+			protocol_version: ETH_PROTOCOL_VERSION_63.0,
 			network_id: self.network_id,
 			start_block_number: self.starting_block,
 			last_imported_block_number: Some(last_imported_number),
@@ -647,7 +652,7 @@ impl ChainSync {
 		}
 	}
 
-	/// Resume  downloading
+	/// Resume downloading
 	fn continue_sync(&mut self, io: &mut SyncIo) {
 		// Collect active peers that can sync
 		let confirmed_peers: Vec<(PeerId, u8)> = self.peers.iter().filter_map(|(peer_id, peer)|
@@ -755,26 +760,45 @@ impl ChainSync {
 						}
 					}
 
-					if let Some(request) = self.old_blocks.as_mut().and_then(|d| d.request_blocks(io, num_active_peers)) {
-						SyncRequester::request_blocks(self, io, peer_id, request, BlockSet::OldBlocks);
-						return;
+					// Only ask for old blocks if the peer has a higher difficulty
+					if force || higher_difficulty {
+						if let Some(request) = self.old_blocks.as_mut().and_then(|d| d.request_blocks(io, num_active_peers)) {
+							SyncRequester::request_blocks(self, io, peer_id, request, BlockSet::OldBlocks);
+							return;
+						}
+					} else {
+						trace!(target: "sync", "peer {} is not suitable for asking old blocks", peer_id);
+						self.deactivate_peer(io, peer_id);
 					}
 				},
 				SyncState::SnapshotData => {
-					if let RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } = io.snapshot_service().status() {
-						if self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize > MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
-							trace!(target: "sync", "Snapshot queue full, pausing sync");
-							self.state = SyncState::SnapshotWaiting;
+					match io.snapshot_service().status() {
+						RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } => {
+							// Initialize the snapshot if not already done
+							self.snapshot.initialize(io.snapshot_service());
+							if self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize > MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
+								trace!(target: "sync", "Snapshot queue full, pausing sync");
+								self.state = SyncState::SnapshotWaiting;
+								return;
+							}
+						},
+						RestorationStatus::Initializing { .. } => {
+							trace!(target: "warp", "Snapshot is stil initializing.");
 							return;
-						}
+						},
+						_ => {
+							return;
+						},
 					}
+
 					if peer_snapshot_hash.is_some() && peer_snapshot_hash == self.snapshot.snapshot_hash() {
 						self.clear_peer_download(peer_id);
 						SyncRequester::request_snapshot_data(self, io, peer_id);
 					}
 				},
 				SyncState::SnapshotManifest | //already downloading from other peer
-					SyncState::Waiting | SyncState::SnapshotWaiting => ()
+					SyncState::Waiting |
+					SyncState::SnapshotWaiting => ()
 			}
 		} else {
 			trace!(target: "sync", "Skipping peer {}, force={}, td={:?}, our td={}, state={:?}", peer_id, force, peer_difficulty, syncing_difficulty, self.state);
@@ -855,7 +879,7 @@ impl ChainSync {
 	fn send_status(&mut self, io: &mut SyncIo, peer: PeerId) -> Result<(), network::Error> {
 		let warp_protocol_version = io.protocol_version(&WARP_SYNC_PROTOCOL_ID, peer);
 		let warp_protocol = warp_protocol_version != 0;
-		let protocol = if warp_protocol { warp_protocol_version } else { ETH_PROTOCOL_VERSION_63 };
+		let protocol = if warp_protocol { warp_protocol_version } else { ETH_PROTOCOL_VERSION_63.0 };
 		trace!(target: "sync", "Sending status to {}, protocol version {}", peer, protocol);
 		let mut packet = RlpStream::new_list(if warp_protocol { 7 } else { 5 });
 		let chain = io.chain().chain_info();
@@ -865,10 +889,7 @@ impl ChainSync {
 		packet.append(&chain.best_block_hash);
 		packet.append(&chain.genesis_hash);
 		if warp_protocol {
-			let manifest = match self.old_blocks.is_some() {
-				true => None,
-				false => io.snapshot_service().manifest(),
-			};
+			let manifest = io.snapshot_service().manifest();
 			let block_number = manifest.as_ref().map_or(0, |m| m.block_number);
 			let manifest_hash = manifest.map_or(H256::new(), |m| keccak(m.into_rlp()));
 			packet.append(&manifest_hash);
@@ -912,29 +933,36 @@ impl ChainSync {
 	}
 
 	fn check_resume(&mut self, io: &mut SyncIo) {
-		if self.state == SyncState::Waiting && !io.chain().queue_info().is_full() {
-			self.state = SyncState::Blocks;
-			self.continue_sync(io);
-		} else if self.state == SyncState::SnapshotWaiting {
-			match io.snapshot_service().status() {
-				RestorationStatus::Inactive => {
-					trace!(target:"sync", "Snapshot restoration is complete");
-					self.restart(io);
-				},
-				RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } => {
-					if !self.snapshot.is_complete() && self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize <= MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
-						trace!(target:"sync", "Resuming snapshot sync");
-						self.state = SyncState::SnapshotData;
+		match self.state {
+			SyncState::Waiting if !io.chain().queue_info().is_full() => {
+				self.state = SyncState::Blocks;
+				self.continue_sync(io);
+			},
+			SyncState::SnapshotWaiting => {
+				match io.snapshot_service().status() {
+					RestorationStatus::Inactive => {
+						trace!(target:"sync", "Snapshot restoration is complete");
+						self.restart(io);
+					},
+					RestorationStatus::Initializing { .. } => {
+						trace!(target:"sync", "Snapshot restoration is initializing");
+					},
+					RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } => {
+						if !self.snapshot.is_complete() && self.snapshot.done_chunks() - (state_chunks_done + block_chunks_done) as usize <= MAX_SNAPSHOT_CHUNKS_DOWNLOAD_AHEAD {
+							trace!(target:"sync", "Resuming snapshot sync");
+							self.state = SyncState::SnapshotData;
+							self.continue_sync(io);
+						}
+					},
+					RestorationStatus::Failed => {
+						trace!(target: "sync", "Snapshot restoration aborted");
+						self.state = SyncState::WaitingPeers;
+						self.snapshot.clear();
 						self.continue_sync(io);
-					}
-				},
-				RestorationStatus::Failed => {
-					trace!(target: "sync", "Snapshot restoration aborted");
-					self.state = SyncState::WaitingPeers;
-					self.snapshot.clear();
-					self.continue_sync(io);
-				},
-			}
+					},
+				}
+			},
+			_ => (),
 		}
 	}
 
@@ -1019,11 +1047,11 @@ impl ChainSync {
 	}
 
 	fn get_consensus_peers(&self) -> Vec<PeerId> {
-		self.peers.iter().filter_map(|(id, p)| if p.protocol_version >= PAR_PROTOCOL_VERSION_2 { Some(*id) } else { None }).collect()
+		self.peers.iter().filter_map(|(id, p)| if p.protocol_version >= PAR_PROTOCOL_VERSION_2.0 { Some(*id) } else { None }).collect()
 	}
 
 	fn get_private_transaction_peers(&self) -> Vec<PeerId> {
-		self.peers.iter().filter_map(|(id, p)| if p.protocol_version >= PAR_PROTOCOL_VERSION_3 { Some(*id) } else { None }).collect()
+		self.peers.iter().filter_map(|(id, p)| if p.protocol_version >= PAR_PROTOCOL_VERSION_3.0 { Some(*id) } else { None }).collect()
 	}
 
 	/// Maintain other peers. Send out any new blocks and transactions
@@ -1119,7 +1147,7 @@ pub mod tests {
 	use super::{PeerInfo, PeerAsking};
 	use ethcore::header::*;
 	use ethcore::client::{BlockChainClient, EachBlockWith, TestBlockChainClient, ChainInfo, BlockInfo};
-	use ethcore::miner::MinerService;
+	use ethcore::miner::{MinerService, PendingOrdering};
 	use private_tx::NoopPrivateTxHandler;
 
 	pub fn get_dummy_block(order: u32, parent_hash: H256) -> Bytes {
@@ -1324,7 +1352,6 @@ pub mod tests {
 			client.set_nonce(sender, U256::from(0));
 		}
 
-
 		// when
 		{
 			let queue = RwLock::new(VecDeque::new());
@@ -1332,7 +1359,7 @@ pub mod tests {
 			let mut io = TestIo::new(&mut client, &ss, &queue, None);
 			io.chain.miner.chain_new_blocks(io.chain, &[], &[], &[], &good_blocks, false);
 			sync.chain_new_blocks(&mut io, &[], &[], &[], &good_blocks, &[], &[]);
-			assert_eq!(io.chain.miner.ready_transactions(io.chain).len(), 1);
+			assert_eq!(io.chain.miner.ready_transactions(io.chain, 10, PendingOrdering::Priority).len(), 1);
 		}
 		// We need to update nonce status (because we say that the block has been imported)
 		for h in &[good_blocks[0]] {
@@ -1348,7 +1375,7 @@ pub mod tests {
 		}
 
 		// then
-		assert_eq!(client.miner.ready_transactions(&client).len(), 1);
+		assert_eq!(client.miner.ready_transactions(&client, 10, PendingOrdering::Priority).len(), 1);
 	}
 
 	#[test]

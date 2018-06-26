@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ fn secret_store(dir: Box<RootDiskDirectory>, iterations: Option<u32>) -> Result<
 }
 
 fn new(n: NewAccount) -> Result<String, String> {
-	let password: String = match n.password_file {
+	let password = match n.password_file {
 		Some(file) => password_from_file(file)?,
 		None => password_prompt()?,
 	};
@@ -94,7 +94,7 @@ fn new(n: NewAccount) -> Result<String, String> {
 	let secret_store = Box::new(secret_store(dir, Some(n.iterations))?);
 	let acc_provider = AccountProvider::new(secret_store, AccountProviderSettings::default());
 	let new_account = acc_provider.new_account(&password).map_err(|e| format!("Could not create new account: {}", e))?;
-	Ok(format!("0x{:?}", new_account))
+	Ok(format!("0x{:x}", new_account))
 }
 
 fn list(list_cmd: ListAccounts) -> Result<String, String> {
@@ -103,7 +103,7 @@ fn list(list_cmd: ListAccounts) -> Result<String, String> {
 	let acc_provider = AccountProvider::new(secret_store, AccountProviderSettings::default());
 	let accounts = acc_provider.accounts().map_err(|e| format!("{}", e))?;
 	let result = accounts.into_iter()
-		.map(|a| format!("0x{:?}", a))
+		.map(|a| format!("0x{:x}", a))
 		.collect::<Vec<String>>()
 		.join("\n");
 

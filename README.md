@@ -27,7 +27,7 @@ Official website: https://parity.io | Be sure to check out [our wiki](https://wi
 
 Parity's goal is to be the fastest, lightest, and most secure Ethereum client. We are developing Parity using the sophisticated and cutting-edge Rust programming language. Parity is licensed under the GPLv3, and can be used for all your Ethereum needs.
 
-From Parity Ethereum client version 1.10.0, the User Interface (UI) is accessible in a separate application called Parity UI. To keep using the UI in the browser (deprecated), [follow these steps](https://wiki.parity.io/FAQ-Basic-Operations,-Configuration,-and-Synchronization.md#the-parity-ui-application-isnt-working-the-way-i-want).
+From Parity Ethereum client version 1.10.0, the User Interface (UI) is accessible in a separate application called Parity UI. To keep using the UI in the browser (deprecated), [follow these steps](https://wiki.parity.io/FAQ-Basic-Operations,-Configuration,-and-Synchronization#the-parity-ui-application-isnt-working-the-way-i-want).
 
 By default, Parity will also run a JSONRPC server on `127.0.0.1:8545` and a websockets server on `127.0.0.1:8546`. This is fully configurable and supports a number of APIs.
 
@@ -48,7 +48,7 @@ We recommend installing Rust through [rustup](https://www.rustup.rs/). If you do
 	$ curl https://sh.rustup.rs -sSf | sh
 	```
 
-	Parity also requires `gcc`, `g++`, `libssl-dev`/`openssl`, `libudev-dev` and `pkg-config` packages to be installed.
+	Parity also requires `gcc`, `g++`, `libssl-dev`/`openssl`, `libudev-dev`, `pkg-config`, `file` and `make` packages to be installed.
 
 - OSX:
 	```bash
@@ -138,13 +138,13 @@ first.
 ## Simple one-line installer for Mac and Ubuntu
 
 ```bash
-bash <(curl https://get.parity.io -Lk)
+bash <(curl https://get.parity.io -L)
 ```
 
 The one-line installer always defaults to the latest beta release. To install a stable release, run:
 
 ```bash
-bash <(curl https://get.parity.io -Lk) -r stable
+bash <(curl https://get.parity.io -L) -r stable
 ```
 
 ## Start Parity

@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -80,6 +80,10 @@ impl SnapshotService for TestSnapshotService {
 		Some((1, 2))
 	}
 
+	fn completed_chunks(&self) -> Option<Vec<H256>> {
+		Some(vec![])
+	}
+
 	fn chunk(&self, hash: H256) -> Option<Bytes> {
 		self.chunks.get(&hash).cloned()
 	}
@@ -129,6 +133,10 @@ impl SnapshotService for TestSnapshotService {
 			self.block_restoration_chunks.lock().insert(hash, chunk);
 		}
 	}
+
+	fn shutdown(&self) {
+		self.abort_restore();
+	}
 }
 
 #[test]
@@ -146,4 +154,3 @@ fn snapshot_sync() {
 	assert_eq!(net.peer(4).snapshot_service.state_restoration_chunks.lock().len(), net.peer(0).snapshot_service.manifest.as_ref().unwrap().state_hashes.len());
 	assert_eq!(net.peer(4).snapshot_service.block_restoration_chunks.lock().len(), net.peer(0).snapshot_service.manifest.as_ref().unwrap().block_hashes.len());
 }
-

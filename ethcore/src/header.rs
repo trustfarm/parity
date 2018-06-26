@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -32,6 +32,19 @@ enum Seal {
 	With,
 	/// The seal/signature is not included.
 	Without,
+}
+
+/// Extended block header, wrapping `Header` with finalized and total difficulty information.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtendedHeader {
+	/// The actual header.
+	pub header: Header,
+	/// Whether the block underlying this header is considered finalized.
+	pub is_finalized: bool,
+	/// The parent block difficulty.
+	pub parent_total_difficulty: U256,
+	/// The block metadata information.
+	pub metadata: Option<Vec<u8>>,
 }
 
 /// A block header.
@@ -325,7 +338,6 @@ fn change_field<T>(hash: &mut Option<H256>, field: &mut T, value: T) where T: Pa
 	}
 }
 
-
 impl Decodable for Header {
 	fn decode(r: &Rlp) -> Result<Self, DecoderError> {
 		let mut blockheader = Header {
@@ -368,19 +380,46 @@ impl HeapSizeOf for Header {
 
 impl ::parity_machine::Header for Header {
 	fn bare_hash(&self) -> H256 { Header::bare_hash(self) }
-
 	fn hash(&self) -> H256 { Header::hash(self) }
-
 	fn seal(&self) -> &[Vec<u8>] { Header::seal(self) }
-
 	fn author(&self) -> &Address { Header::author(self) }
-
 	fn number(&self) -> BlockNumber { Header::number(self) }
 }
 
 impl ::parity_machine::ScoredHeader for Header {
+	type Value = U256;
+
 	fn score(&self) -> &U256 { self.difficulty() }
 	fn set_score(&mut self, score: U256) { self.set_difficulty(score) }
+}
+
+impl ::parity_machine::Header for ExtendedHeader {
+	fn bare_hash(&self) -> H256 { self.header.bare_hash() }
+	fn hash(&self) -> H256 { self.header.hash() }
+	fn seal(&self) -> &[Vec<u8>] { self.header.seal() }
+	fn author(&self) -> &Address { self.header.author() }
+	fn number(&self) -> BlockNumber { self.header.number() }
+}
+
+impl ::parity_machine::ScoredHeader for ExtendedHeader {
+	type Value = U256;
+
+	fn score(&self) -> &U256 { self.header.difficulty() }
+	fn set_score(&mut self, score: U256) { self.header.set_difficulty(score) }
+}
+
+impl ::parity_machine::TotalScoredHeader for ExtendedHeader {
+	type Value = U256;
+
+	fn total_score(&self) -> U256 { self.parent_total_difficulty + *self.header.difficulty() }
+}
+
+impl ::parity_machine::FinalizableHeader for ExtendedHeader {
+	fn is_finalized(&self) -> bool { self.is_finalized }
+}
+
+impl ::parity_machine::WithMetadataHeader for ExtendedHeader {
+	fn metadata(&self) -> Option<&[u8]> { self.metadata.as_ref().map(|v| v.as_ref()) }
 }
 
 #[cfg(test)]

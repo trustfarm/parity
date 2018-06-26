@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -162,11 +162,13 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 	}
 
 	/// Unregister current IO handler.
-	pub fn unregister_handler(&self) -> Result<(), IoError> {
-		self.channel.send_io(IoMessage::RemoveHandler {
+	pub fn unregister_handler(&self) {
+		// `send_io` returns an error only if the channel is closed, which means that the
+		// background thread is no longer running. Therefore the handler is no longer active and
+		// can be considered as unregistered.
+		let _ = self.channel.send_io(IoMessage::RemoveHandler {
 			handler_id: self.handler,
-		})?;
-		Ok(())
+		});
 	}
 
 }

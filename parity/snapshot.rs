@@ -1,4 +1,4 @@
-// Copyright 2015-2017 Parity Technologies (UK) Ltd.
+// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -122,6 +122,7 @@ fn restore_using<R: SnapshotReader>(snapshot: Arc<SnapshotService>, reader: &R, 
 
 	match snapshot.status() {
 		RestorationStatus::Ongoing { .. } => Err("Snapshot file is incomplete and missing chunks.".into()),
+		RestorationStatus::Initializing { .. } => Err("Snapshot restoration is still initializing.".into()),
 		RestorationStatus::Failed => Err("Snapshot restoration failed.".into()),
 		RestorationStatus::Inactive => {
 			info!("Restoration complete.");
@@ -181,8 +182,9 @@ impl SnapshotCommand {
 			true
 		);
 
-		let client_db = db::open_client_db(&client_path, &client_config)?;
 		let restoration_db_handler = db::restoration_db_handler(&client_path, &client_config);
+		let client_db = restoration_db_handler.open(&client_path)
+			.map_err(|e| format!("Failed to open database {:?}", e))?;
 
 		let service = ClientService::start(
 			client_config,
